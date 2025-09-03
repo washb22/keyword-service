@@ -6,7 +6,8 @@ from app.models import db, Keyword
 from app.auth.routes import token_required
 from .scraper import run_check
 from datetime import datetime
-from app.utils import json_response # <-- 이 줄 추가
+from app.utils import json_response
+import traceback  # <-- 이 줄 추가
 
 keyword_bp = Blueprint('keyword', __name__)
 
@@ -16,7 +17,7 @@ keyword_bp = Blueprint('keyword', __name__)
 def create_keyword(current_user):
     data = request.get_json()
     if not data or not 'keyword_text' in data or not 'post_url' in data:
-        return json_response({'message': 'Required fields are missing!'}, status=400) # jsonify -> json_response
+        return json_response({'message': 'Required fields are missing!'}, status=400)
     new_keyword = Keyword(
         user_id=current_user.id,
         keyword_text=data['keyword_text'],
@@ -25,15 +26,13 @@ def create_keyword(current_user):
     )
     db.session.add(new_keyword)
     db.session.commit()
-    return json_response({'message': 'New keyword created!'}, status=201) # jsonify -> json_response
+    return json_response({'message': 'New keyword created!'}, status=201)
 
-
-# app/keyword/routes.py의 get_keywords 함수 수정
 
 @keyword_bp.route('/keywords', methods=['GET'])
 @token_required
 def get_keywords(current_user):
-    keywords = Keyword.query.filter_by(user_id=current_user.id).order_by(Keyword.id.desc()).all() # 최신순 정렬 추가
+    keywords = Keyword.query.filter_by(user_id=current_user.id).order_by(Keyword.id.desc()).all()
     output = []
     for keyword in keywords:
         keyword_data = {
@@ -42,15 +41,13 @@ def get_keywords(current_user):
             'post_url': keyword.post_url,
             'priority': keyword.priority,
             'ranking_status': keyword.ranking_status,
-            'ranking': keyword.ranking, # <-- 순위 정보 추가
-            'section': keyword.section, # <-- 섹션 정보 추가
+            'ranking': keyword.ranking,
+            'section': keyword.section,
             'last_checked_at': keyword.last_checked_at.isoformat() if keyword.last_checked_at else None
         }
         output.append(keyword_data)
     return json_response({'keywords': output})
 
-
-# app/keyword/routes.py의 check_keyword_ranking 함수 수정
 
 @keyword_bp.route('/keywords/<int:keyword_id>/check', methods=['POST'])
 @token_required
@@ -58,30 +55,44 @@ def check_keyword_ranking(current_user, keyword_id):
     keyword = Keyword.query.filter_by(id=keyword_id, user_id=current_user.id).first()
     if not keyword:
         return json_response({'message': 'Keyword not found or permission denied'}, status=404)
+    
     try:
+        print(f"키워드 '{keyword.keyword_text}' 순위 확인 시작...")
+        
         # 봇으로부터 (상태, 순위, 섹션제목) 세 값을 받음
         status, rank, section = run_check(keyword.keyword_text, keyword.post_url)
+        
+        print(f"스크래핑 결과 - 상태: {status}, 순위: {rank}, 섹션: {section}")
         
         # 세 값 모두 DB에 업데이트
         keyword.ranking_status = status
         keyword.ranking = rank
-        keyword.section = section # <-- section 저장 로직 추가
+        keyword.section = section
         keyword.last_checked_at = datetime.utcnow()
-        db.session.commit()
         
-        # 응답 메시지도 순위와 섹션을 포함하도록 변경
-        response_message = f'Check complete. Status: {status}'
-        if rank:
-            response_message += f', Rank: {rank}'
-        if section:
-            response_message += f', Section: {section}'
+        db.session.commit()
+        print("DB 업데이트 완료")
+        
+        # 응답 메시지 구성
+        if rank and rank > 0:
+            response_message = f'순위 확인 완료. {section} 섹션에서 {rank}위에 노출되고 있습니다.'
+        elif status == "노출X":
+            response_message = f'순위 확인 완료. 현재 노출되지 않고 있습니다.'
+        else:
+            response_message = f'순위 확인 완료. 상태: {status}'
 
-        return json_response({'message': response_message})
+        return json_response({
+            'message': response_message,
+            'status': status,
+            'ranking': rank,
+            'section': section
+        })
+        
     except Exception as e:
-        traceback.print_exc() 
-        return json_response({'message': f'An error occurred: {str(e)}'}, status=500)
+        print(f"순위 확인 중 오류 발생: {str(e)}")
+        traceback.print_exc()
+        return json_response({'message': f'순위 확인 중 오류가 발생했습니다: {str(e)}'}, status=500)
 
-# --- 아래 코드를 app/keyword/routes.py 파일 맨 아래에 추가하세요 ---
 
 @keyword_bp.route('/keywords/<int:keyword_id>', methods=['PUT'])
 @token_required
@@ -124,4 +135,3 @@ def delete_keyword(current_user, keyword_id):
     db.session.commit()
 
     return json_response({'message': f'Keyword with ID {keyword_id} has been deleted.'})
-
