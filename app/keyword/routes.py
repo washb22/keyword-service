@@ -71,3 +71,49 @@ def check_keyword_ranking(current_user, keyword_id):
     except Exception as e:
         traceback.print_exc() 
         return json_response({'message': f'An error occurred: {str(e)}'}, status=500)
+
+
+# --- 아래 코드를 app/keyword/routes.py 파일 맨 아래에 추가하세요 ---
+
+@keyword_bp.route('/keywords/<int:keyword_id>', methods=['PUT'])
+@token_required
+def update_keyword(current_user, keyword_id):
+    """키워드 수정 API"""
+    keyword = Keyword.query.filter_by(id=keyword_id, user_id=current_user.id).first()
+    if not keyword:
+        return json_response({'message': 'Keyword not found or permission denied'}, status=404)
+
+    data = request.get_json()
+    if not data:
+        return json_response({'message': 'Request body is missing!'}, status=400)
+
+    # 수정 가능한 필드들 업데이트
+    keyword.keyword_text = data.get('keyword_text', keyword.keyword_text)
+    keyword.post_url = data.get('post_url', keyword.post_url)
+    keyword.priority = data.get('priority', keyword.priority)
+
+    db.session.commit()
+
+    # 수정된 키워드 정보 반환
+    updated_keyword_data = {
+        'id': keyword.id,
+        'keyword_text': keyword.keyword_text,
+        'post_url': keyword.post_url,
+        'priority': keyword.priority,
+    }
+    return json_response({'message': 'Keyword updated successfully!', 'keyword': updated_keyword_data})
+
+
+@keyword_bp.route('/keywords/<int:keyword_id>', methods=['DELETE'])
+@token_required
+def delete_keyword(current_user, keyword_id):
+    """키워드 삭제 API"""
+    keyword = Keyword.query.filter_by(id=keyword_id, user_id=current_user.id).first()
+    if not keyword:
+        return json_response({'message': 'Keyword not found or permission denied'}, status=404)
+
+    db.session.delete(keyword)
+    db.session.commit()
+
+    return json_response({'message': f'Keyword with ID {keyword_id} has been deleted.'})
+
