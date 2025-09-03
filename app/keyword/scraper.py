@@ -210,9 +210,21 @@ def run_check(keyword: str, post_url: str, post_title: str = None) -> tuple:  # 
 
 
 def extract_section_title(section, keyword):
-    """섹션 제목 추출 - AI 브리핑은 이미 걸러짐"""
+    """섹션 제목 추출 - 키워드 기반 개선"""
     try:
-        # 1. 섹션 바로 위의 제목 찾기 (가장 정확)
+        section_text = section.text[:500] if section.text else ""
+        
+        # 1. 키워드가 포함된 구체적인 제목 우선 찾기
+        lines = section_text.split('\n')
+        for line in lines[:5]:  # 처음 5줄만 확인
+            line = line.strip()
+            # 키워드가 포함되고 적절한 길이의 제목
+            if keyword in line and 5 < len(line) < 50:
+                # URL이나 물음표가 없는 제목
+                if not line.startswith('http') and '?' not in line:
+                    return line
+        
+        # 2. 섹션 바로 위의 제목 찾기 (기존 로직 유지)
         try:
             prev_sibling = section.find_element(By.XPATH, "./preceding-sibling::*[1]")
             if prev_sibling and prev_sibling.is_displayed():
@@ -226,31 +238,27 @@ def extract_section_title(section, keyword):
         except:
             pass
         
-        # 2. 섹션 내부에서 인기글 패턴 찾기
-        try:
-            # 섹션 텍스트에서 인기글 패턴 검색
-            section_text = section.text[:300] if section.text else ""
-            
-            # "육아·결혼 인기글" 패턴
+        # 3. 인기글 패턴 찾기
+        if "인기글" in section_text:
+            # "육아·결혼 인기글", "상품리뷰 인기글" 패턴
             if "육아" in section_text and "인기글" in section_text:
                 return "육아·결혼 인기글"
-            # "상품리뷰 인기글" 패턴
             elif "상품리뷰" in section_text and "인기글" in section_text:
                 return "상품리뷰 인기글"
-            # 일반 인기글
             elif "인기글" in section_text:
-                # 인기글 앞의 수식어 찾기
                 match = re.search(r'([\w·\s]+)?인기글', section_text)
                 if match:
                     title = match.group(0).strip()
                     if len(title) < 30:
                         return title
                 return "인기글"
-        except:
-            pass
         
-        # 3. 클래스명에서 힌트
+        # 4. 클래스명 기반
         class_name = section.get_attribute("class") or ""
+        
+        # 파워링크/광고는 스킵
+        if "power_link" in class_name or "ad" in class_name:
+            return "광고"
         
         if "keyword_challenge" in class_name:
             return "인기글"
@@ -260,30 +268,12 @@ def extract_section_title(section, keyword):
             return "블로그"
         elif "cafe" in class_name or "article" in class_name:
             return "카페"
-        elif "kin" in class_name:
-            return "지식iN"
-        elif "news" in class_name:
-            return "뉴스"
         
-        # 4. 섹션 내 헤더 요소 찾기
-        try:
-            headers = section.find_elements(By.CSS_SELECTOR, "h2, h3")
-            for header in headers:
-                # 링크가 아닌 헤더만
-                if not header.find_elements(By.TAG_NAME, "a"):
-                    text = header.text.strip()
-                    if text and len(text) < 30 and not text.endswith("?"):
-                        return text
-        except:
-            pass
-        
-        # 기본값
         return "검색결과"
         
     except Exception as e:
         print(f"제목 추출 오류: {e}")
         return "검색결과"
-
 
 def extract_content_links(section):
     """실제 보이는 게시물 링크만 정확히 추출"""
