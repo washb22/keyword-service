@@ -1,6 +1,7 @@
 # app/__init__.py
 from flask import Flask
 from flask_migrate import Migrate
+from flask_cors import CORS      # <-- CORS를 사용하기 위해 이 줄을 꼭 추가해야 합니다.
 from config import Config
 from .models import db
 
@@ -10,6 +11,8 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     app.config['JSON_AS_ASCII'] = False # <-- 이 줄을 추가하세요.
+
+    CORS(app) # <-- 이 줄 추가
 
     db.init_app(app)
     migrate.init_app(app, db)

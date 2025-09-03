@@ -16,3 +16,5 @@ class Keyword(db.Model):
     ranking_status = db.Column(db.String(50), nullable=True, default='확인 대기')
     last_checked_at = db.Column(db.DateTime, nullable=True)
     priority = db.Column(db.String(10), nullable=False, default='중')
+    ranking = db.Column(db.Integer, nullable=True) # <-- 이 줄을 추가하세요
+    section = db.Column(db.String(100), nullable=True) # <-- 이 줄만 추가하시면 됩니다.

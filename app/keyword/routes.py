@@ -46,17 +46,28 @@ def get_keywords(current_user):
     return json_response({'keywords': output}) # jsonify -> json_response
 
 
+# app/keyword/routes.py의 check_keyword_ranking 함수
 @keyword_bp.route('/keywords/<int:keyword_id>/check', methods=['POST'])
 @token_required
 def check_keyword_ranking(current_user, keyword_id):
     keyword = Keyword.query.filter_by(id=keyword_id, user_id=current_user.id).first()
     if not keyword:
-        return json_response({'message': 'Keyword not found or permission denied'}, status=404) # jsonify -> json_response
+        return json_response({'message': 'Keyword not found or permission denied'}, status=404)
     try:
-        status = run_check(keyword.keyword_text, keyword.post_url)
+        # 봇으로부터 (상태, 순위) 두 값을 받음
+        status, rank = run_check(keyword.keyword_text, keyword.post_url)
+        
+        # 두 값 모두 DB에 업데이트
         keyword.ranking_status = status
+        keyword.ranking = rank
         keyword.last_checked_at = datetime.utcnow()
         db.session.commit()
-        return json_response({'message': f'Check complete. Status: {status}'}) # jsonify -> json_response
+        
+        # 응답 메시지도 순위를 포함하도록 변경
+        response_message = f'Check complete. Status: {status}'
+        if rank:
+            response_message += f', Rank: {rank}'
+        return json_response({'message': response_message})
     except Exception as e:
-        return json_response({'message': f'An error occurred: {str(e)}'}, status=500) # jsonify -> json_response
+        traceback.print_exc() 
+        return json_response({'message': f'An error occurred: {str(e)}'}, status=500)
