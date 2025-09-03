@@ -22,6 +22,7 @@ def create_keyword(current_user):
         user_id=current_user.id,
         keyword_text=data['keyword_text'],
         post_url=data['post_url'],
+        post_title=data.get('post_title'),  # 이 줄이 있는지 확인!
         priority=data.get('priority', '중')
     )
     db.session.add(new_keyword)
@@ -39,6 +40,7 @@ def get_keywords(current_user):
             'id': keyword.id,
             'keyword_text': keyword.keyword_text,
             'post_url': keyword.post_url,
+            'post_title': keyword.post_title,  # 이 줄이 있는지 확인!
             'priority': keyword.priority,
             'ranking_status': keyword.ranking_status,
             'ranking': keyword.ranking,
@@ -60,7 +62,7 @@ def check_keyword_ranking(current_user, keyword_id):
         print(f"키워드 '{keyword.keyword_text}' 순위 확인 시작...")
         
         # 봇으로부터 (상태, 순위, 섹션제목) 세 값을 받음
-        status, rank, section = run_check(keyword.keyword_text, keyword.post_url)
+        status, rank, section = run_check(keyword.keyword_text, keyword.post_url, keyword.post_title)
         
         print(f"스크래핑 결과 - 상태: {status}, 순위: {rank}, 섹션: {section}")
         
@@ -108,6 +110,7 @@ def update_keyword(current_user, keyword_id):
 
     # 수정 가능한 필드들 업데이트
     keyword.keyword_text = data.get('keyword_text', keyword.keyword_text)
+    keyword.post_title = data.get('post_title', keyword.post_title)  # 이 줄 추가
     keyword.post_url = data.get('post_url', keyword.post_url)
     keyword.priority = data.get('priority', keyword.priority)
 

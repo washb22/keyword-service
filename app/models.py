@@ -18,3 +18,4 @@ class Keyword(db.Model):
     priority = db.Column(db.String(10), nullable=False, default='중')
     ranking = db.Column(db.Integer, nullable=True) # <-- 이 줄을 추가하세요
     section = db.Column(db.String(100), nullable=True) # <-- 이 줄만 추가하시면 됩니다.
+    post_title = db.Column(db.String(200), nullable=True)  # 새로 추가
