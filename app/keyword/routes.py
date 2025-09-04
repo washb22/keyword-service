@@ -7,6 +7,7 @@ from app.auth.routes import token_required
 from .scraper import run_check
 from datetime import datetime
 from app.utils import json_response
+from datetime import datetime, timezone # timezone 추가
 import traceback  # <-- 이 줄 추가
 
 keyword_bp = Blueprint('keyword', __name__)
@@ -70,7 +71,7 @@ def check_keyword_ranking(current_user, keyword_id):
         keyword.ranking_status = status
         keyword.ranking = rank
         keyword.section = section
-        keyword.last_checked_at = datetime.utcnow()
+        keyword.last_checked_at = datetime.now(timezone.utc) # UTC 시간임을 명시
         
         db.session.commit()
         print("DB 업데이트 완료")

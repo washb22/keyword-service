@@ -170,12 +170,30 @@ def run_check(keyword: str, post_url: str, post_title: str = None) -> tuple:
         print(f"--- '{keyword}' 순위 확인 완료 ---\n")
 
 def extract_section_title(section, keyword):
-    """키워드, 텍스트, 클래스명 기반으로 섹션 제목 추출"""
+    """(개선) XPath와 텍스트 분석을 통해 더욱 정교하게 섹션 제목 추출"""
     try:
-        title_element = section.find_element(By.CSS_SELECTOR, "[class*='headline'], .title_area .title")
+        # 1. (기존 로직) 스마트블록/신규 섹션의 명시적 헤드라인 우선 탐색
+        # 섹션 내부에 h2, h3, a 태그 중에 title 클래스를 가진게 있는지 확인
+        title_element = section.find_element(By.CSS_SELECTOR, "h2.title, h3.title, a.title, [class*='headline']")
         if title_element and title_element.text and len(title_element.text.strip()) > 1:
-            return title_element.text.strip()
-            
+            title_text = title_element.text.strip()
+            # "더보기" 같은 불필요한 텍스트 제거
+            if "더보기" in title_text:
+                title_text = title_text.split("더보기")[0].strip()
+            return title_text
+
+        # 2. (✨신규 로직✨) XPath를 사용해 섹션 바로 '이전' 요소에서 제목 탐색
+        # "건강·의학 인기글" 같은 제목은 섹션 밖에 위치하는 경우가 많습니다.
+        try:
+            # 바로 직전의 형제 요소(div, h2 등)를 찾습니다.
+            prev_sibling = section.find_element(By.XPATH, "./preceding-sibling::*[1]")
+            prev_text = prev_sibling.text.strip()
+            if "인기글" in prev_text and len(prev_text) < 50:
+                 return prev_text
+        except Exception:
+            pass # 이전 요소가 없으면 그냥 넘어갑니다.
+
+        # 3. (기존 로직 개선) 섹션 내부 텍스트에서 '인기글' 패턴 찾기
         section_text = section.text[:200]
         if "인기글" in section_text:
             match = re.search(r'([\w·\s]+)?인기글', section_text)
@@ -184,6 +202,7 @@ def extract_section_title(section, keyword):
                 if len(title) < 30: return title
             return "인기글"
 
+        # 4. (기존 로직) 클래스명 기반으로 섹션 종류 추론
         class_name = section.get_attribute("class") or ""
         if "ad" in class_name or "power_link" in class_name: return "광고"
         if "blog" in class_name: return "블로그"
@@ -191,7 +210,8 @@ def extract_section_title(section, keyword):
 
     except Exception:
         pass
-    return "검색결과"
+    return "검색결과" # 최후의 보루
+
 
 def extract_content_links(section):
     """실제 보이는 게시물 링크만 정확히 추출"""
