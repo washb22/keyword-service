@@ -194,44 +194,89 @@ def extract_section_title(section, keyword):
     return "검색결과"
 
 def extract_content_links(section):
-    """(최종 결정판) 스마트블록을 먼저 시도하고, 실패 시 일반 인기글 로직으로 전환"""
+    """실제 보이는 게시물 링크만 정확히 추출"""
     content_links = []
     
-    # 1. 스마트블록 로직을 최우선으로 시도
     try:
+        # 0. 스마트블록 우선 확인 (추가)
         post_text_containers = section.find_elements(By.CSS_SELECTOR, "div[class*='text-container']")
         if post_text_containers:
             for container in post_text_containers:
                 try:
                     title_link = container.find_element(By.CSS_SELECTOR, "a[class*='text-title']")
                     content_links.append(title_link)
-                except Exception:
+                except:
                     continue
+            # 실제로 링크를 찾았을 때만 return
             if content_links:
                 return content_links
-    except Exception:
-        pass
-
-    # 2. 스마트블록이 아니라고 판단되면, '일반 인기글' 원본 로직으로 fallback
-    try:
+        
+        # 1. 일반 인기글 처리 (원본 그대로)
+        # 디버깅: 섹션 텍스트 확인
+        section_text = section.text[:200] if section.text else ""
+        if "인기글" in section_text:
+            print(f"  [디버깅] 인기글 섹션 발견, 텍스트: {section_text[:100]}...")
+        
+        # 리스트 아이템 방식
         list_items = section.find_elements(By.CSS_SELECTOR, "li")
+        
+        # 리스트 아이템이 없으면 모든 링크 시도
         if not list_items:
-            # li가 없는 경우, 섹션 전체에서 a 태그를 찾음
+            print(f"  [디버깅] li 요소 없음, 모든 a 태그 검색")
             all_links = section.find_elements(By.TAG_NAME, "a")
             for link in all_links:
-                href = link.get_attribute('href')
-                if is_valid_content_link(href):
+                href = link.get_attribute("href") or ""
+                text = link.text.strip()
+                if ("blog.naver" in href or "cafe.naver" in href) and len(text) > 5:
+                    print(f"    -> 링크 발견: {text[:30]}...")
                     content_links.append(link)
-        else:
-            # li가 있는 경우, 각 li 내부에서 유효한 링크를 찾음
-            for item in list_items:
-                all_links_in_item = item.find_elements(By.TAG_NAME, 'a')
-                for link in all_links_in_item:
-                    href = link.get_attribute('href')
-                    if is_valid_content_link(href):
-                        content_links.append(link)
-                        break # li당 하나의 유효 링크만 찾고 다음으로 넘어감
-    except Exception:
-        pass
 
+        # 2. 리스트 구조가 아닌 경우
+        if not content_links:
+            link_selectors = [
+                "a.title_link",
+                "a.api_txt_lines",
+                "a.link_tit",
+                "a.total_tit",
+                "a.name",
+                "a.dsc_link",
+                "a[href*='blog.naver']",
+                "a[href*='cafe.naver']",
+            ]
+            
+            for selector in link_selectors:
+                links = section.find_elements(By.CSS_SELECTOR, selector)
+                for link in links:
+                    if link.is_displayed() and link not in content_links:
+                        href = link.get_attribute("href") or ""
+                        text = link.text.strip()
+                        
+                        if is_valid_content_link(href) and len(text) > 5:
+                            content_links.append(link)
+        
+        # 3. 그래도 없으면 모든 링크 확인 (최후 수단)
+        if not content_links:
+            all_links = section.find_elements(By.TAG_NAME, 'a')
+            
+            for link in all_links:
+                if not link.is_displayed():
+                    continue
+                
+                # 너무 작은 링크 제외
+                if link.size['height'] < 10 or link.size['width'] < 10:
+                    continue
+                
+                href = link.get_attribute("href") or ""
+                text = link.text.strip()
+                
+                # 유효한 콘텐츠 링크이고 충분한 텍스트
+                if is_valid_content_link(href) and len(text) > 5:
+                    # UI 요소 제외
+                    if not any(skip in text for skip in ["더보기", "설정", "옵션", "필터", "전체"]):
+                        if link not in content_links:
+                            content_links.append(link)
+        
+    except Exception as e:
+        print(f"링크 추출 오류: {e}")
+    
     return content_links
