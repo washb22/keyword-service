@@ -2,6 +2,12 @@
 import os
 
 class Config:
-    SECRET_KEY = 'super-secret-key'  # 실제 서비스에서는 더 복잡하고 긴 값으로 변경해야 합니다.
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///app.db'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'super-secret-key-fallback'
+    DATABASE_URL = os.environ.get('DATABASE_URL') or 'sqlite:///app.db'
+    
+    # PostgreSQL URL 처리 (Render에서 제공하는 postgres:// 를 postgresql:// 로 변환)
+    if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://')
+    
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
